@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: invenio-postgres
+    environment:
+      POSTGRES_DB: invenio_db
+      POSTGRES_USER: invenio_user
+      POSTGRES_PASSWORD: invenio_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - invenio-network
+
+  # Backend API
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: invenio-backend
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://invenio_user:invenio_password@postgres:5432/invenio_db
+      JWT_SECRET: your-super-secret-jwt-key-here-make-it-long-and-random
+      JWT_ACCESS_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 30d
+      CORS_ORIGINS: http://localhost:3000,http://localhost:3001
+    ports:
+      - "3001:3001"
+    depends_on:
+      - postgres
+    networks:
+      - invenio-network
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+
+  # Frontend
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: invenio-frontend
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:3001
+      NEXT_PUBLIC_APP_NAME: Invenio Master
+      NEXT_PUBLIC_APP_VERSION: 1.0.0
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - invenio-network
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+      - /app/.next
+
+volumes:
+  postgres_data:
+
+networks:
+  invenio-network:
+    driver: bridge
